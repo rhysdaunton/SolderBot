@@ -63,6 +63,7 @@ import org.openpnp.spi.Nozzle;
 import org.openpnp.util.BeanUtils;
 import org.openpnp.util.MovableUtils;
 import org.openpnp.util.UiUtils;
+import org.openpnp.util.VisionUtils;
 
 import com.jgoodies.forms.layout.ColumnSpec;
 import com.jgoodies.forms.layout.FormLayout;
@@ -308,6 +309,8 @@ public class MachineControlsPanel extends JPanel {
             UiUtils.submitUiMachineTask(() -> {
                 HeadMountable tool = getSelectedTool();
                 Camera camera = tool.getHead().getDefaultCamera();
+                Camera tip_camera = VisionUtils.getBottomVisionCamera();
+                MainFrame.get().getCameraViews().ensureCameraVisible(tip_camera);
                 MovableUtils.moveToLocationAtSafeZ(tool, camera.getLocation(tool));
             });
         }
@@ -320,6 +323,7 @@ public class MachineControlsPanel extends JPanel {
             UiUtils.submitUiMachineTask(() -> {
                 HeadMountable tool = getSelectedTool();
                 Camera camera = tool.getHead().getDefaultCamera();
+                MainFrame.get().getCameraViews().ensureCameraVisible(camera);
                 MovableUtils.moveToLocationAtSafeZ(camera, tool.getLocation());
             });
         }

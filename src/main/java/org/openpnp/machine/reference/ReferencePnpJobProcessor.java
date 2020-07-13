@@ -29,7 +29,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.openpnp.gui.MainFrame;
 import org.openpnp.gui.support.Wizard;
+import org.openpnp.machine.reference.driver.GcodeDriver;
 import org.openpnp.machine.reference.feeder.ReferencePushPullFeeder;
 import org.openpnp.machine.reference.wizards.ReferencePnpJobProcessorConfigurationWizard;
 import org.openpnp.model.BoardLocation;
@@ -40,6 +42,7 @@ import org.openpnp.model.Location;
 import org.openpnp.model.Panel;
 import org.openpnp.model.Part;
 import org.openpnp.model.Placement;
+import org.openpnp.spi.Camera;
 import org.openpnp.spi.Feeder;
 import org.openpnp.spi.FiducialLocator;
 import org.openpnp.spi.Head;
@@ -79,7 +82,7 @@ public class ReferencePnpJobProcessor extends AbstractPnpJobProcessor {
     protected int maxVisionRetries = 3;
 
     @Element(required = false)
-    public PnpJobPlanner planner = new SimplePnpJobPlanner();
+    public PnpJobPlanner planner = new RotationPnpJobPlanner();
 
     protected Job job;
 
@@ -433,6 +436,11 @@ public class ReferencePnpJobProcessor extends AbstractPnpJobProcessor {
                 return this;
             }
             
+            try {
+            	Camera camera = VisionUtils.getBottomVisionCamera();
+            	MainFrame.get().getCameraViews().ensureCameraVisible(camera);
+            } catch (Exception e) {}
+            
             return new Plan();
         }
     }
@@ -671,13 +679,13 @@ public class ReferencePnpJobProcessor extends AbstractPnpJobProcessor {
                         placement.getId());
                 
                 // Move to pick location.
-                MovableUtils.moveToLocationAtSafeZ(nozzle, feeder.getPickLocation());
+                //MovableUtils.moveToLocationAtSafeZ(nozzle, feeder.getPickLocation());
 
                 // Pick
                 nozzle.pick(part);
 
                 // Retract
-                nozzle.moveToSafeZ();
+                //nozzle.moveToSafeZ();
             }
             catch (Exception e) {
                 throw new JobProcessorException(nozzle, e);
@@ -821,6 +829,19 @@ public class ReferencePnpJobProcessor extends AbstractPnpJobProcessor {
             
             totalPartsPlaced++;
             
+            //TODO: original location of clean
+			  int cleanInterval = 10; 
+			  if((double)(totalPartsPlaced%cleanInterval)== 0) { 
+				  HashMap<String, Object> params = new HashMap<>(); params.put("job",job); 
+				  params.put("jobProcessor", this);
+				  try {
+					  	Configuration.get().getScripting().on("Job.Clean", params);
+				  } 
+				  catch
+				  (Exception e) { throw new JobProcessorException(null, e); }
+			  }
+			 
+            
             scriptComplete(plannedPlacement, placementLocation);
             
             return this;
@@ -830,8 +851,7 @@ public class ReferencePnpJobProcessor extends AbstractPnpJobProcessor {
             fireTextStatus("Placing %s for %s.", part.getId(), placement.getId());
             
             try {
-                // Move to the placement location
-                MovableUtils.moveToLocationAtSafeZ(nozzle, placementLocation);
+            	MovableUtils.moveToLocationAtSafeZ(nozzle, placementLocation, true, true);
 
                 // Place the part
                 nozzle.place();
@@ -1017,6 +1037,8 @@ public class ReferencePnpJobProcessor extends AbstractPnpJobProcessor {
         }
     }
     
+    static public Location lastLocation = new Location(LengthUnit.Millimeters, 0, 0, 0, 0);
+    
     protected class Finish implements Step {
         public Step step() throws JobProcessorException {
             new Cleanup().step();
@@ -1066,6 +1088,7 @@ public class ReferencePnpJobProcessor extends AbstractPnpJobProcessor {
                 Logger.info("{}: {}", jobPlacement, jobPlacement.getError().getMessage());
             }
 
+            lastLocation = new Location(LengthUnit.Millimeters, 0, 0, 0, 0);
             return null;
         }
     }
@@ -1169,6 +1192,66 @@ public class ReferencePnpJobProcessor extends AbstractPnpJobProcessor {
                         throw new Error("Unhandled Error Handling case " + plannedPlacement.jobPlacement.getPlacement().getErrorHandling());
                 }
             }
+        }
+    }
+    
+    
+    /**
+     * A job planner that sorts the job placements based on limited rotations and close proximity moves...hopefully
+     */
+    
+    @Root
+    public static class RotationPnpJobPlanner implements PnpJobPlanner {
+        @Override
+        public List<PlannedPlacement> plan(Head head, List<JobPlacement> jobPlacements) {
+            /**
+             * Create a List<PlannedPlacement> that we will fill up and then return.
+             */
+            List<PlannedPlacement> plannedPlacements = new ArrayList<>();
+
+            for(Nozzle nozzle : head.getNozzles()) {		//to appease the exception gods
+            	if (jobPlacements.isEmpty())break;
+            	double placementRadius = 20; //mm
+            	double closest = 10000;		//arbitrary large number in mm
+            	PlannedPlacement target = new PlannedPlacement(nozzle, nozzle.getNozzleTip(), jobPlacements.get(0));
+            	boolean priority = false;
+            	for(JobPlacement jobPlacement : jobPlacements) {
+            			double distance = lastLocation.getLinearDistanceTo(jobPlacement.getPlacement().getLocation());
+            			if(jobPlacement.getPlacement().isPriority() && distance < closest) {
+            				closest = distance;
+            				target = new PlannedPlacement(nozzle, nozzle.getNozzleTip(), jobPlacement);
+            				priority = true;
+            			}
+            	}
+            	if(!priority) {
+            		boolean rotationHit = false;
+            		for(JobPlacement jobPlacement : jobPlacements) {
+            			double distance = lastLocation.getLinearDistanceTo(jobPlacement.getPlacement().getLocation());
+            			if(distance < placementRadius && lastLocation.getRotation() == jobPlacement.getPlacement().getLocation().getRotation()) {
+            				rotationHit = true;
+            			}
+            		}
+            		for(JobPlacement jobPlacement : jobPlacements) {
+            			double distance = lastLocation.getLinearDistanceTo(jobPlacement.getPlacement().getLocation());
+            			if(distance < closest && distance < placementRadius && lastLocation.getRotation() == jobPlacement.getPlacement().getLocation().getRotation()) {
+            				closest = distance;
+            				target = new PlannedPlacement(nozzle, nozzle.getNozzleTip(), jobPlacement);
+            			}
+            			else if(distance < closest && !rotationHit) {
+            				closest = distance;
+            				target = new PlannedPlacement(nozzle, nozzle.getNozzleTip(), jobPlacement);
+            			}
+            		}	
+            	}
+            	
+            	jobPlacements.remove(target.jobPlacement);
+            	plannedPlacements.add(target);
+            	lastLocation = target.jobPlacement.getPlacement().getLocation();
+           	}
+            /**
+             * Return the results
+             */
+            return plannedPlacements;
         }
     }
     

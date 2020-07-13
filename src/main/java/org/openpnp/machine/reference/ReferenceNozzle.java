@@ -155,7 +155,7 @@ public class ReferenceNozzle extends AbstractNozzle implements ReferenceHeadMoun
         this.headOffsets = headOffsets;
         firePropertyChange("headOffsets", oldValue, headOffsets);
         // Changing a head offset invalidates the nozzle tip calibration.
-        ReferenceNozzleTipCalibration.resetAllNozzleTips();
+        //ReferenceNozzleTipCalibration.resetAllNozzleTips();
     }
 
     public String getVacuumActuatorName() {
@@ -333,7 +333,7 @@ public class ReferenceNozzle extends AbstractNozzle implements ReferenceHeadMoun
         // No calibration needed.
         return true;
     }
-
+    
     @Override
     public void moveTo(Location location, double speed, MoveToOption... options) throws Exception {
         // Shortcut Double.NaN. Sending Double.NaN in a Location is an old API that should no

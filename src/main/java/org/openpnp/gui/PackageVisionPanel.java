@@ -97,14 +97,14 @@ public class PackageVisionPanel extends JPanel {
         unitsCombo = new JComboBox(LengthUnit.values());
         propertiesPanel.add(unitsCombo, "4, 2, left, default");
 
-        JLabel lblBodyWidth = new JLabel("Body Width");
+        JLabel lblBodyWidth = new JLabel("Solder Amount");
         propertiesPanel.add(lblBodyWidth, "2, 4, right, default");
 
         bodyWidthTf = new JTextField();
         propertiesPanel.add(bodyWidthTf, "4, 4, left, default");
         bodyWidthTf.setColumns(10);
 
-        JLabel lblBodyHeight = new JLabel("Body Length");
+        JLabel lblBodyHeight = new JLabel("Dwell Time (s)");
         propertiesPanel.add(lblBodyHeight, "2, 6, right, default");
 
         bodyHeightTf = new JTextField();

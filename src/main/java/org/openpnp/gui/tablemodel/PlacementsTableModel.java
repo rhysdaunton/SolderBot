@@ -41,11 +41,11 @@ public class PlacementsTableModel extends AbstractTableModel {
     final Configuration configuration;
 
     private String[] columnNames =
-            new String[] {"Enabled", "ID", "Part", "Side", "X", "Y", "Rot.", "Type", "Placed", "Status", "Error Handling", "Comments"};
+            new String[] {"Enabled", "ID", "Part", "Side", "X", "Y", "Rot.", "Type", "Placed", "Status", "Error Handling", "Comments", "Priority"};
 
     private Class[] columnTypes = new Class[] {Boolean.class, PartCellValue.class, Part.class, Side.class,
             LengthCellValue.class, LengthCellValue.class, RotationCellValue.class, Type.class,
-            Boolean.class, Status.class, ErrorHandling.class, String.class};
+            Boolean.class, Status.class, ErrorHandling.class, String.class, Boolean.class};
 
     public enum Status {
         Ready,
@@ -158,6 +158,10 @@ public class PlacementsTableModel extends AbstractTableModel {
             else if (columnIndex == 11) {
                 placement.setComments((String) aValue);
             }
+            else if (columnIndex == 12) {
+            	placement.setPriority((Boolean) aValue);
+            	jobPlacementsPanel.updateActivePlacements();
+            }
         }
         catch (Exception e) {
             // TODO: dialog, bad input
@@ -225,6 +229,8 @@ public class PlacementsTableModel extends AbstractTableModel {
                 return placement.getErrorHandling();
             case 11:
                 return placement.getComments();
+            case 12:
+            	return placement.isPriority();
             default:
                 return null;
         }

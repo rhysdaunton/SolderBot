@@ -414,7 +414,7 @@ public class JogControlsPanel extends JPanel {
         lblC.setFont(new Font("Lucida Grande", Font.PLAIN, 22)); //$NON-NLS-1$
         panelControls.add(lblC, "4, 12"); //$NON-NLS-1$
 
-        JButton counterclockwiseButton = new JButton(cPlusAction);
+        JButton counterclockwiseButton = new JButton(cMinusAction);
         counterclockwiseButton.setHideActionText(true);
         panelControls.add(counterclockwiseButton, "6, 12"); //$NON-NLS-1$
 
@@ -422,7 +422,7 @@ public class JogControlsPanel extends JPanel {
         homeCButton.setHideActionText(true);
         panelControls.add(homeCButton, "8, 12"); //$NON-NLS-1$
 
-        JButton clockwiseButton = new JButton(cMinusAction);
+        JButton clockwiseButton = new JButton(cPlusAction);
         clockwiseButton.setHideActionText(true);
         panelControls.add(clockwiseButton, "10, 12"); //$NON-NLS-1$
 
@@ -535,7 +535,7 @@ public class JogControlsPanel extends JPanel {
     };
 
     @SuppressWarnings("serial")
-    public Action cPlusAction = new AbstractAction("C+", Icons.rotateCounterclockwise) { //$NON-NLS-1$
+    public Action cPlusAction = new AbstractAction("C+", Icons.rotateClockwise) { //$NON-NLS-1$
         @Override
         public void actionPerformed(ActionEvent arg0) {
             jog(0, 0, 0, 1);
@@ -543,7 +543,7 @@ public class JogControlsPanel extends JPanel {
     };
 
     @SuppressWarnings("serial")
-    public Action cMinusAction = new AbstractAction("C-", Icons.rotateClockwise) { //$NON-NLS-1$
+    public Action cMinusAction = new AbstractAction("C-", Icons.rotateCounterclockwise) { //$NON-NLS-1$
         @Override
         public void actionPerformed(ActionEvent arg0) {
             jog(0, 0, 0, -1);

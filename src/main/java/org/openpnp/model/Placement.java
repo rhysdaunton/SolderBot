@@ -80,6 +80,9 @@ public class Placement extends AbstractModelObject implements Identifiable {
     
     @Attribute(required = false)
     private boolean enabled = true;
+    
+    @Attribute(required = false)
+    private boolean priority = false;
 
     @SuppressWarnings("unused")
     private Placement() {
@@ -186,6 +189,16 @@ public class Placement extends AbstractModelObject implements Identifiable {
         Object oldValue = this.enabled;
         this.enabled = enabled;
         firePropertyChange("enabled", oldValue, enabled);
+    }
+    
+    public boolean isPriority() {
+    	return priority;
+    }
+    
+    public void setPriority(boolean priority) {
+        Object oldValue = this.priority;
+        this.priority = priority;
+        firePropertyChange("priority", oldValue, priority);
     }
 
     @Override

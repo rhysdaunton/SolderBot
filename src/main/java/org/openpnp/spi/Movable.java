@@ -8,7 +8,7 @@ public interface Movable extends Locatable {
      * RAW: disable all internal corrections, just tell the driver to move to that position
      * NO_ADDITIONAL_MOVES: disable backslash compensation or anything else, that causes aditional moves
      */
-    public enum MoveToOption { RawMove, SpeedOverPrecision }
+    public enum MoveToOption { RawMove, SpeedOverPrecision, PreWet }
 
     
     /**

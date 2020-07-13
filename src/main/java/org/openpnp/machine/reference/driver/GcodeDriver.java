@@ -333,16 +333,31 @@ public class GcodeDriver extends AbstractReferenceDriver implements Named, Runna
         Axis yAxis = null;
         double xHomeCoordinateNonSquare = 0;
         double yHomeCoordinate = 0;
+        
+        double yHomeCoordinateNonSquare = 0;
+        double xHomeCoordinate = 0;
+        
         for (Axis axis : axes) {
-            if (axis.getType() == Axis.Type.X) {
-                xAxis = axis;
-                xHomeCoordinateNonSquare = axis.getHomeCoordinate();
-            }
             if (axis.getType() == Axis.Type.Y) {
                 yAxis = axis;
-                yHomeCoordinate = axis.getHomeCoordinate();
+                yHomeCoordinateNonSquare = axis.getHomeCoordinate();
+            }
+            if (axis.getType() == Axis.Type.X) {
+                xAxis = axis;
+                xHomeCoordinate = axis.getHomeCoordinate();
             }
         }
+        
+//        for (Axis axis : axes) {
+//            if (axis.getType() == Axis.Type.X) {
+//                xAxis = axis;
+//                xHomeCoordinateNonSquare = axis.getHomeCoordinate();
+//            }
+//            if (axis.getType() == Axis.Type.Y) {
+//                yAxis = axis;
+//                yHomeCoordinate = axis.getHomeCoordinate();
+//            }
+//        }
         // Compensate non-squareness factor: 
         // We are homing to the native controller's non-square coordinate system, this does not
         // match OpenPNP's square coordinate system, if the controller's Y home is non-zero. 
@@ -355,12 +370,14 @@ public class GcodeDriver extends AbstractReferenceDriver implements Named, Runna
         // sets the internal X coordinate correctly immediately after homing, so we can capture the 
         // home location correctly. Without this compensation the discrepancy between internal and 
         // machines coordinates was resolved with the first move, as it is done in absolute mode. 
-        double xHomeCoordinateSquare = xHomeCoordinateNonSquare - nonSquarenessFactor*yHomeCoordinate;
+        //double xHomeCoordinateSquare = xHomeCoordinateNonSquare - nonSquarenessFactor*yHomeCoordinate;
+        
+        double yHomeCoordinateSquare = yHomeCoordinateNonSquare - nonSquarenessFactor*xHomeCoordinate;
         
         for (Axis axis : axes) {
-            if (axis == xAxis) {
+            if (axis == yAxis) {
             	// for X use the coordinate adjusted for non-squareness.
-            	axis.setCoordinate(xHomeCoordinateSquare);
+            	axis.setCoordinate(yHomeCoordinateSquare);
             }
             else {
             	// otherwise just use the standard coordinate.
@@ -386,11 +403,11 @@ public class GcodeDriver extends AbstractReferenceDriver implements Named, Runna
 
                 // homeOffset contains the offset, but we are not really concerned with that,
                 // we just reset X,Y back to the home-coordinate at this point.
-                if (xAxis != null) { 
-                	xAxis.setCoordinate(xHomeCoordinateSquare);
-                }
                 if (yAxis != null) { 
-                	yAxis.setCoordinate(yHomeCoordinate);
+                	yAxis.setCoordinate(yHomeCoordinateSquare);
+                }
+                if (xAxis != null) { 
+                	xAxis.setCoordinate(xHomeCoordinate);
                 }
                 
                 String g92command = getCommand(null, CommandType.POST_VISION_HOME_COMMAND);
@@ -491,8 +508,8 @@ public class GcodeDriver extends AbstractReferenceDriver implements Named, Runna
                 new Location(units, xAxis == null ? 0 : xAxis.getTransformedCoordinate(hm),
                         yAxis == null ? 0 : yAxis.getTransformedCoordinate(hm),
                         zAxis == null ? 0 : zAxis.getTransformedCoordinate(hm),
-                        rotationAxis == null ? 0 : rotationAxis.getTransformedCoordinate(hm))
-                                .add(hm.getHeadOffsets());
+                        rotationAxis == null ? 0 : rotationAxis.getTransformedCoordinate(hm));
+        		location = location.add(hm.getHeadOffsets().rotateXy(location.getRotation()).invert(true, false, false, false));
         return location;
     }
 
@@ -505,6 +522,23 @@ public class GcodeDriver extends AbstractReferenceDriver implements Named, Runna
         double backlashOffsetZ = this.backlashOffsetZ;
         double backlashOffsetR = this.backlashOffsetR;
         double nonSquarenessFactor = this.nonSquarenessFactor;
+        double angle = location.getRotation();
+        
+        double preWet = 5;
+        
+        String command = getCommand(hm, CommandType.MOVE_TO_COMMAND);
+        
+        // keep copy for calling subdrivers as to not add offset on offset
+        Location locationOriginal = location;
+
+        location = location.convertToUnits(units);
+        location = location.subtract(hm.getHeadOffsets().rotateXy(angle).invert(true, false, false, false));
+        
+        double x = location.getX();
+        double y = location.getY();
+        double z = location.getZ();
+        double rotation = location.getRotation();
+        
         // check options
         for (MoveToOption currentOption: options) {
             switch (currentOption) {
@@ -520,27 +554,44 @@ public class GcodeDriver extends AbstractReferenceDriver implements Named, Runna
                     backlashOffsetZ = 0;
                     backlashOffsetR = 0;
                     nonSquarenessFactor = 0;
-                    break;
+                	break;
+                case PreWet:
+                	rotation = rotation + preWet;
+                	List <String> responses = sendGcode("T1");
+                	
+                	String commandConfirmRegex = getCommand(hm, CommandType.COMMAND_CONFIRM_REGEX);
+                    String commandErrorRegex = getCommand(hm, CommandType.COMMAND_ERROR_REGEX);
+                    if (commandConfirmRegex != null) {
+                        if (!containsMatch(responses, commandConfirmRegex)) {
+                            long t = System.currentTimeMillis();
+                            boolean done = false;
+                            boolean err = false;
+                            while (!done && !err && System.currentTimeMillis() - t < timeoutMilliseconds) {
+                                responses = sendCommandNoFlush(null, 250); //Don't flush because the response we're looking for could have happened before this send
+                                if (commandErrorRegex != null) {
+                                    err = containsMatch(responses, commandErrorRegex);
+                                }
+                                done = containsMatch(responses, commandConfirmRegex);
+                            }
+                            if (err) {
+                                throw new Exception("Controller raised an error during command: " + responses);
+                            }
+                            if (!done) {
+                                throw new Exception("Timed out waiting for command to complete.");
+                            }
+                        }
+                    }
+                	break;
+                	
             }
         }
-        
-        // keep copy for calling subdrivers as to not add offset on offset
-        Location locationOriginal = location;
-
-        location = location.convertToUnits(units);
-        location = location.subtract(hm.getHeadOffsets());
-
-        double x = location.getX();
-        double y = location.getY();
-        double z = location.getZ();
-        double rotation = location.getRotation();
 
         Axis xAxis = getAxis(hm, Axis.Type.X);
         Axis yAxis = getAxis(hm, Axis.Type.Y);
         Axis zAxis = getAxis(hm, Axis.Type.Z);
         Axis rotationAxis = getAxis(hm, Axis.Type.Rotation);
         
-        String command = getCommand(hm, CommandType.MOVE_TO_COMMAND);
+        //String command = getCommand(hm, CommandType.MOVE_TO_COMMAND);
         
         // If the command has forced-output coordinate variables "XF", "YF", "ZF" and "RotationF", 
         // always include the corresponding axis in the command.
@@ -630,32 +681,32 @@ public class GcodeDriver extends AbstractReferenceDriver implements Named, Runna
              */
             
             // Primary checks to see if an axis should move
-            if (xAxis != null && xAxis.getCoordinate() != x) {
+            if (xAxis != null && Math.round((xAxis.getCoordinate()*1000000d)/1000000d) != Math.round((x*1000000d)/1000000d)) {
                 includeX = true;
             }
-            if (yAxis != null && yAxis.getCoordinate() != y) {
+            if (yAxis != null && Math.round((yAxis.getCoordinate()*1000000d)/1000000d) != Math.round((y*1000000d)/1000000d)) {
                 includeY = true;
             }
-            if (zAxis != null && zAxis.getCoordinate() != z) {
+            if (zAxis != null && Math.round((zAxis.getCoordinate()*1000000d)/1000000d) != Math.round((z*100000)/1000000d)) {
                 includeZ = true;
             }
-            if (rotationAxis != null && rotationAxis.getCoordinate() != rotation) {
+            if (rotationAxis != null && Math.round((rotationAxis.getCoordinate()*1000000d)/1000000d) != Math.round((rotation*1000000d)/1000000d)) {
                 includeRotation = true;
             }
 
             // If Y is moving and there is a non squareness factor we also need to move X, even if
             // no move was intended for X.
-            if (includeY && nonSquarenessFactor != 0 && xAxis != null) {
-                includeX = true;
+            if (includeX && nonSquarenessFactor != 0 && yAxis != null) {
+                includeY = true;
             }
             
             if (includeX) {
-                double newX = x + nonSquarenessFactor * y;
-                command = substituteVariable(command, "X", newX);
-                command = substituteVariable(command, "XF", newX);
-                command = substituteVariable(command, "BacklashOffsetX", x + backlashOffsetX + nonSquarenessFactor * y); // Backlash Compensation
-                command = substituteVariable(command, "XDecreasing", newX < xAxis.getCoordinate() ? true : null);
-                command = substituteVariable(command, "XIncreasing", newX > xAxis.getCoordinate() ? true : null);
+                //double newX = x + nonSquarenessFactor * y;
+                command = substituteVariable(command, "X", x);
+                command = substituteVariable(command, "XF", x);
+                command = substituteVariable(command, "BacklashOffsetX", x + backlashOffsetX);// + nonSquarenessFactor * y); // Backlash Compensation
+                command = substituteVariable(command, "XDecreasing", x < xAxis.getCoordinate() ? true : null);
+                command = substituteVariable(command, "XIncreasing", x > xAxis.getCoordinate() ? true : null);
                 if (xAxis.getPreMoveCommand() != null) {
                     String preMoveCommand = xAxis.getPreMoveCommand();
                     preMoveCommand = substituteVariable(preMoveCommand, "Coordinate", xAxis.getCoordinate());
@@ -672,16 +723,18 @@ public class GcodeDriver extends AbstractReferenceDriver implements Named, Runna
             }
 
             if (includeY) {
-            	command = substituteVariable(command, "Y", y);
-            	command = substituteVariable(command, "YF", y);
-                command = substituteVariable(command, "BacklashOffsetY", y + backlashOffsetY); // Backlash Compensation
-                command = substituteVariable(command, "YDecreasing", y < yAxis.getCoordinate() ? true : null);
-                command = substituteVariable(command, "YIncreasing", y > yAxis.getCoordinate() ? true : null);
+            	double newY = y + nonSquarenessFactor * hm.getHead().getDefaultCamera().getLocation().getX();
+            	command = substituteVariable(command, "Y", newY);
+            	command = substituteVariable(command, "YF", newY);
+                command = substituteVariable(command, "BacklashOffsetY", y + backlashOffsetY + nonSquarenessFactor * hm.getHead().getDefaultCamera().getLocation().getX()); // Backlash Compensation
+                command = substituteVariable(command, "YDecreasing", newY < yAxis.getCoordinate() ? true : null);
+                command = substituteVariable(command, "YIncreasing", newY > yAxis.getCoordinate() ? true : null);
                 if (yAxis.getPreMoveCommand() != null) {
                     String preMoveCommand = yAxis.getPreMoveCommand();
                     preMoveCommand = substituteVariable(preMoveCommand, "Coordinate", yAxis.getCoordinate());
                     sendGcode(preMoveCommand);
                 }
+                yAxis.setCoordinate(y);
             }
             else {
             	command = substituteVariable(command, "Y", null);
@@ -766,6 +819,43 @@ public class GcodeDriver extends AbstractReferenceDriver implements Named, Runna
                         }
                     }
                 }
+                
+                for (MoveToOption currentOption: options) {
+                    switch (currentOption) {
+                    	case PreWet:
+                    		rotation = rotation - preWet;
+                    		sendGcode("T0");
+                    		
+                    		String commandConfirmRegex = getCommand(hm, CommandType.COMMAND_CONFIRM_REGEX);
+                            if (commandConfirmRegex != null) {
+                                if (!containsMatch(responses, commandConfirmRegex)) {
+                                    long t = System.currentTimeMillis();
+                                    boolean done = false;
+                                    boolean err = false;
+                                    while (!done && !err && System.currentTimeMillis() - t < timeoutMilliseconds) {
+                                        responses = sendCommandNoFlush(null, 250); //Don't flush because the response we're looking for could have happened before this send
+                                        if (commandErrorRegex != null) {
+                                            err = containsMatch(responses, commandErrorRegex);
+                                        }
+                                        done = containsMatch(responses, commandConfirmRegex);
+                                    }
+                                    if (err) {
+                                        throw new Exception("Controller raised an error during command: " + responses);
+                                    }
+                                    if (!done) {
+                                        throw new Exception("Timed out waiting for command to complete.");
+                                    }
+                                }
+                            }
+                            break;
+                    	case RawMove:
+                    		break;
+                    	case SpeedOverPrecision:
+                    		break;
+                    	default:
+                    		break;
+                    }
+                }
 
                 // And save the final values on the axes.
                 if (xAxis != null) {
@@ -802,7 +892,6 @@ public class GcodeDriver extends AbstractReferenceDriver implements Named, Runna
                     sendGcode(command);
             }
         }
-
     }
 
     private boolean containsMatch(List<String> responses, String regex) {

@@ -107,7 +107,7 @@ public class ReferenceHead extends AbstractHead {
             throw new Exception(String.format("Can't move %s to %s, outside of soft limits on head %s.",
                     hm.getName(), location, getName()));
         }
-        getDriver().moveTo(hm, location, speed);
+        getDriver().moveTo(hm, location, speed, options);
         getMachine().fireMachineHeadActivity(this);
     }
 

@@ -357,12 +357,15 @@ public class Utils2D {
      * @return
      */
     public static double normalizeAngle180(double angle) {
-        while (angle >= 180) {
+    	//now limits from 0 to 360
+        while (angle >= 360) {
             angle -= 360;
         }
-        while (angle < -180) {
+        while (angle < 0) {
             angle += 360;
         }
+        if (angle > 345) return 0d;
+        if (angle > 330) return 330d;
         return angle;
     }
     

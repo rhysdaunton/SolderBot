@@ -67,6 +67,7 @@ import org.openpnp.spi.Nozzle;
 import org.openpnp.util.MovableUtils;
 import org.openpnp.util.UiUtils;
 import org.openpnp.util.Utils2D;
+import org.openpnp.util.VisionUtils;
 import org.pmw.tinylog.Logger;
 
 public class JobPlacementsPanel extends JPanel {
@@ -101,11 +102,11 @@ public class JobPlacementsPanel extends JPanel {
 
         singleSelectionActionGroup = new ActionGroup(removeAction, editPlacementFeederAction,
                 setTypeAction, setSideAction, setPlacedAction, setErrorHandlingAction,
-                setEnabledAction);
+                setEnabledAction, setPriorityAction);
         singleSelectionActionGroup.setEnabled(false);
 
         multiSelectionActionGroup = new ActionGroup(removeAction, setTypeAction, setSideAction,
-                setPlacedAction, setErrorHandlingAction, setEnabledAction);
+                setPlacedAction, setErrorHandlingAction, setEnabledAction, setPriorityAction);
         multiSelectionActionGroup.setEnabled(false);
 
         captureAndPositionActionGroup = new ActionGroup(captureCameraPlacementLocation,
@@ -214,6 +215,11 @@ public class JobPlacementsPanel extends JPanel {
         setEnabledMenu.add(new SetEnabledAction(true));
         setEnabledMenu.add(new SetEnabledAction(false));
         popupMenu.add(setEnabledMenu);
+        
+        JMenu setPriorityMenu = new JMenu(setPriorityAction);
+        setPriorityMenu.add(new SetPriorityAction(true));
+        setPriorityMenu.add(new SetPriorityAction(false));
+        popupMenu.add(setPriorityMenu);
 
         JMenu setErrorHandlingMenu = new JMenu(setErrorHandlingAction);
         setErrorHandlingMenu.add(new SetErrorHandlingAction(ErrorHandling.Alert));
@@ -487,6 +493,7 @@ public class JobPlacementsPanel extends JPanel {
 
                 Camera camera = MainFrame.get().getMachineControls().getSelectedTool().getHead()
                         .getDefaultCamera();
+                MainFrame.get().getCameraViews().ensureCameraVisible(camera);
                 MovableUtils.moveToLocationAtSafeZ(camera, location);
                 try {
                     Map<String, Object> globals = new HashMap<>();
@@ -520,6 +527,7 @@ public class JobPlacementsPanel extends JPanel {
                         getSelection().getLocation());
                 Camera camera = MainFrame.get().getMachineControls().getSelectedTool().getHead()
                         .getDefaultCamera();
+                MainFrame.get().getCameraViews().ensureCameraVisible(camera);
                 MovableUtils.moveToLocationAtSafeZ(camera, location);
                 
                 try {
@@ -545,11 +553,17 @@ public class JobPlacementsPanel extends JPanel {
         public void actionPerformed(ActionEvent arg0) {
             Location location = Utils2D.calculateBoardPlacementLocation(boardLocation,
                     getSelection().getLocation());
+            try {
+            	Camera camera = VisionUtils.getBottomVisionCamera();
+            	MainFrame.get().getCameraViews().ensureCameraVisible(camera);
+            } catch (Exception e) {}
 
-            Nozzle nozzle = MainFrame.get().getMachineControls().getSelectedNozzle();
-            UiUtils.submitUiMachineTask(() -> {
-                MovableUtils.moveToLocationAtSafeZ(nozzle, location);
-            });
+            finally{
+            	Nozzle nozzle = MainFrame.get().getMachineControls().getSelectedNozzle();
+                UiUtils.submitUiMachineTask(() -> {
+                    MovableUtils.moveToLocationAtSafeZ(nozzle, location, true);
+                });
+            }
         }
     };
 
@@ -750,6 +764,36 @@ public class JobPlacementsPanel extends JPanel {
         public void actionPerformed(ActionEvent arg0) {
             for (Placement placement : getSelections()) {
                 placement.setEnabled(enabled);
+                tableModel.fireTableDataChanged();   
+                updateActivePlacements();
+            }
+        }
+    };
+    
+    public final Action setPriorityAction = new AbstractAction() {
+        {
+            putValue(NAME, "Set Priority");
+            putValue(SHORT_DESCRIPTION, "Set priority to...");
+        }
+
+        @Override
+        public void actionPerformed(ActionEvent arg0) {}
+    };
+
+    class SetPriorityAction extends AbstractAction {
+        final Boolean priority;
+
+        public SetPriorityAction(Boolean priority) {
+            this.priority = priority;
+            String name = priority ? "Priority" : "No Priority";
+            putValue(NAME, name);
+            putValue(SHORT_DESCRIPTION, "Set priority to " + name);
+        }
+
+        @Override
+        public void actionPerformed(ActionEvent arg0) {
+            for (Placement placement : getSelections()) {
+                placement.setPriority(priority);
                 tableModel.fireTableDataChanged();   
                 updateActivePlacements();
             }

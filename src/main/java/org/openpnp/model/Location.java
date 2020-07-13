@@ -245,6 +245,21 @@ public class Location {
         return new Location(getUnits(), x * getX(), y * getY(), z * getZ(),
                 rotation * getRotation());
     }
+    
+    /**
+     * Returns a new Location based on this Location with absolute values.
+     * Units are the same as this Location.
+     * 
+     * @param x
+     * @param y
+     * @param z
+     * @param rotation
+     * @return
+     */
+    public Location absolute(boolean x, boolean y, boolean z, boolean rotation) {
+    	return new Location(getUnits(), (x ? Math.abs(getX()) : getX()), (y ? Math.abs(getY()) : getY()),
+                (z ? Math.abs(getZ()) : getZ()), (rotation ? Math.abs(getRotation()) : getRotation()));
+    }
 
     /**
      * Returns a new Location with the same units as this one and with any of fields specified as

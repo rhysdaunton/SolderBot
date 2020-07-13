@@ -97,6 +97,7 @@ import org.openpnp.spi.Machine;
 import org.openpnp.spi.MachineListener;
 import org.openpnp.util.MovableUtils;
 import org.openpnp.util.UiUtils;
+import org.openpnp.util.VisionUtils;
 import org.pmw.tinylog.Logger;
 
 import com.google.common.eventbus.Subscribe;
@@ -1312,6 +1313,9 @@ public class JobPanel extends JPanel {
         public void actionPerformed(ActionEvent arg0) {
             UiUtils.submitUiMachineTask(() -> {
                 HeadMountable tool = MainFrame.get().getMachineControls().getSelectedTool();
+                Camera camera = VisionUtils.getBottomVisionCamera();
+                MainFrame.get().getCameraViews().ensureCameraVisible(camera);
+                
                 Location location = getSelection().getLocation();
                 MovableUtils.moveToLocationAtSafeZ(tool, location);
             });
